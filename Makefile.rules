@@ -1,0 +1,24 @@
+SRC=../src
+
+# SeqAn library and other libraries are located here. If you work locally, update this path with local library path.
+CXXFLAGS+=-I/mnt/compgen/inhouse/include
+
+# C++11 flag
+CXXFLAGS+=-std=c++11
+
+default: all
+all: main
+
+main: MurmurHash3.o main.o
+	$(CXX) $(LDFLAGS) -pthread MurmurHash3.o main.o -o main
+
+MurmurHash3.o: $(SRC)/MurmurHash3.cpp
+	$(CXX) $(CXXFLAGS) -c $(SRC)/MurmurHash3.cpp
+
+main.o: $(SRC)/main.cpp
+	$(CXX) $(CXXFLAGS) -c $(SRC)/*.cpp
+
+clean:
+	rm -f murmur.o main.o main
+
+.PHONY: default all clean
