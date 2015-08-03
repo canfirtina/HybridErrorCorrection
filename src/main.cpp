@@ -33,11 +33,8 @@ StringSet<CharString> shortReadSeqs;
 StringSet<CharString> longReadIds;
 StringSet<CharString> longReadSeqs;
 
-vector< string> shortreads; // [read_id]
-vector< string> longreads;  // [read_id]
-
-vector< vector< string> > shortkmers; // [read_id][kmer_id]
-vector< vector< string> > longkmers;  // [read_id][kmer_id]
+vector< string> shortReads; // [read_id]
+vector< string> longReads;  // [read_id]
 
 vector< vector< vector<uint> > > shortMurmurhashFingerprints; // [hash_id][read_id][kmer_id]
 vector< vector< vector<uint> > > longMurmurhashFingerprints;  // [hash_id][read_id][kmer_id]
@@ -49,7 +46,7 @@ vector < map < int, vector < int > > > filteredPairsF1;
 vector < map < int, vector < int > > > filteredPairsF2;;
 
 template <typename Tfilename, typename Tids, typename Tseqs>
-void loadReads(Tfilename & fileLocation, Tids & ids, Tseqs & seqs, vector<string> & reads) {
+void loadReads(Tfilename & fileLocation, Tids & ids, Tseqs & seqs, vector<string> & sequencingReads) {
 	SeqFileIn seqFileIn;
 	if (!open(seqFileIn, toCString(fileLocation))) {
 		std::cerr << "ERROR: Could not open the file.\n";
@@ -62,47 +59,33 @@ void loadReads(Tfilename & fileLocation, Tids & ids, Tseqs & seqs, vector<string
 		return;
 	}
 	
-	cout << "[INFO] " << length(seqs) << " reads are loaded from " << fileLocation << "." << endl;
-	reads.clear();
-	//for (unsigned i = 0; i < length(seqs); ++i)
+	cout << length(seqs) << " sequencing reads are loaded from " << fileLocation << "." << endl;
+	sequencingReads.clear();
 	for (unsigned i = 0; i < length(seqs); ++i)
-		reads.push_back(std::string(toCString(seqs[i])));
+		sequencingReads.push_back(std::string(toCString(seqs[i])));
 }
 
-//Takes reads of length >= k, and divides each read into k-mers. Collection of k-mers of
-//each read is returned with vector< vector< string> > &kmers
-void createKMers( vector< string> &reads, vector< vector< string> > &kmers, int k){
-	
-	kmers.clear();
-	for (int i = 0; i < reads.size(); ++i) {
-		kmers.push_back(vector<string>());
-		for (int s = 0; s < reads[i].size() - k + 1; ++s)
-			kmers[i].push_back(reads[i].substr(s, k));
-	}
-}
-
-void hashKMersOfReadWithMurmurHash( vector<string> &kmers, vector<uint> &hashedKMers, int seed){
+void hashKMersOfReadWithMurmurHash( string &read, vector<uint> &hashedKMers, int seed, int k){
 
 	//output of murmurhash3 function
 	uint32_t murmurHashOut;
 
 	//for each kmer of the current read
-	for( int curMer = 0; curMer < kmers.size(); curMer++){
-		MurmurHash3_x86_32( (kmers[curMer]).c_str(), kmers[curMer].size(), seed, &murmurHashOut);
-		hashedKMers[curMer] = murmurHashOut;
+	for( int i = 0; i < (read.size() - k + 1); i++){
+		MurmurHash3_x86_32( read.c_str() + i, k, seed, &murmurHashOut);
+		hashedKMers[i] = murmurHashOut;
 	}
 }
 
-void murmurHashFingerprintsWithSeed (	vector < vector < string > > *input,
+void murmurHashFingerprintsWithSeed (	vector < string > *reads,
 					vector < vector < vector < uint > > > *murmurHashFingerprints, 
-					int startIndex, int endIndex){
-	int readCount = input->size();
-	//cout << "Thread ID: " << std::this_thread::get_id() << " is responsible for range [" << startIndex << ", " << endIndex << "]" << endl;
+					int startIndex, int endIndex, int k){
+	int readCount = reads->size();
 	
 	//for each read for current hash function
 	for (int seed = startIndex; seed <= endIndex; ++seed)
-		for (int read = 0; read < readCount; ++read)
-			hashKMersOfReadWithMurmurHash((*input)[read], (*murmurHashFingerprints)[seed][read], seed);
+		for (int readIndex = 0; readIndex < readCount; ++readIndex)
+			hashKMersOfReadWithMurmurHash((*reads)[readIndex], (*murmurHashFingerprints)[seed][readIndex], seed, k);
 }
 
 //This functions creates h-many hash functions using MurmurHash3 to generate
@@ -111,18 +94,14 @@ void murmurHashFingerprintsWithSeed (	vector < vector < string > > *input,
 //You can reach any fingerprint by this indexing order:
 //hManyMurmurHashFingerPrints[hthHashFunction][nthRead][kthFingerPrint]
 //parameter h defines how many fingerprint function will be created.
-void createHMurmurHashFingerPrints(	vector< vector<string> > & input,
+void createHMurmurHashFingerPrints(	vector< string > & reads,
 					vector< vector< vector<uint> > > & hManyMurmurHashFingerprints, 
-					int hashCount, int numberOfThreads){
+					int k, int hashCount, int numberOfThreads){
 	if (numberOfThreads < 1) 
 		numberOfThreads = 1;
-	int readCount = input.size();
+	int readCount = reads.size();
 	int batchSize = (hashCount + numberOfThreads - 1) / numberOfThreads;
 
-	//cout << "[INFO] Number of threads: " << numberOfThreads;
-	//cout << ";\tNumber of hash functions: " << hashCount;
-	//cout << ";\tEach thread is responsible for " << batchSize << " hash functions" << endl;
-	
 	//creating h-many hash functions
 	hManyMurmurHashFingerprints.clear();
 	hManyMurmurHashFingerprints.resize(hashCount);
@@ -132,9 +111,9 @@ void createHMurmurHashFingerPrints(	vector< vector<string> > & input,
 		//total number of reads whose kmers to be hashed
 		hManyMurmurHashFingerprints[h].resize(readCount);
 
-		for( int read = 0; read < readCount; ++read)
+		for( int readIndex = 0; readIndex < readCount; ++readIndex)
 			//total number of kmers count for the current read
-			hManyMurmurHashFingerprints[h][read].resize(input[read].size());
+			hManyMurmurHashFingerprints[h][readIndex].resize(reads[readIndex].size() - k + 1);
 	}
 	
 	vector< std::thread> threads;
@@ -143,7 +122,7 @@ void createHMurmurHashFingerPrints(	vector< vector<string> > & input,
 		int startIndex = t * batchSize;
 		int endIndex = (t + 1) * batchSize - 1;
 		if (endIndex >= hashCount) endIndex = hashCount - 1;
-		threads.push_back(thread(murmurHashFingerprintsWithSeed, &input, &hManyMurmurHashFingerprints, startIndex, endIndex));
+		threads.push_back(thread(murmurHashFingerprintsWithSeed, &reads, &hManyMurmurHashFingerprints, startIndex, endIndex, k));
 	}
 	for (auto& th : threads) 
 		th.join();
@@ -232,7 +211,7 @@ void firstFilterElimination (	vector < map < uint, vector < pair < int, int > > 
 
 //TODO: rewrite this method
 void secondFilterElimination( vector< map<int, vector<int> > > &pairsPassedFirstFilter,
-                             vector< string> &shortreads, vector< string> &longreads,
+                             vector< string> &shortReads, vector< string> &longReads,
                              vector< map<int, vector<int> > > &pairsPassedSecondFilter,
                              int pieceLength, int iterationLength, int kmerlength, float threshold){
     
@@ -242,19 +221,19 @@ void secondFilterElimination( vector< map<int, vector<int> > > &pairsPassedFirst
     
     
     
-    for( int firstRead = 0; firstRead < shortreads.size(); firstRead++){
+    for( int firstRead = 0; firstRead < shortReads.size(); firstRead++){
         
         vector< uint32_t> firstReadFinprints;
-        for( int sIndex = 0; sIndex < shortreads[firstRead].size(); sIndex++){
+        for( int sIndex = 0; sIndex < shortReads[firstRead].size(); sIndex++){
             
-            string kmer = shortreads[firstRead].substr(sIndex, kmerlength);
+            string kmer = shortReads[firstRead].substr(sIndex, kmerlength);
             uint32_t shortReadMurmurOut;
             MurmurHash3_x86_32( kmer.c_str(), kmer.size(), 0, &shortReadMurmurOut);
             
             firstReadFinprints.push_back( shortReadMurmurOut);
         }
         
-        numberOfFirstReadPieces = (((int)shortreads[firstRead].size()-pieceLength)/iterationLength) + 1;
+        numberOfFirstReadPieces = (((int)shortReads[firstRead].size()-pieceLength)/iterationLength) + 1;
         
         //Set of kmer length = length of the string - kmerlength + 1
         numberOfKmersForEachReadPiece =  pieceLength - kmerlength + 1;
@@ -279,7 +258,7 @@ void secondFilterElimination( vector< map<int, vector<int> > > &pairsPassedFirst
                     int curLongReadPiece = pairsPassedFirstFilter[firstRead][curKey->first][curLongReadPieceIndex];
                     for( int sIndex = curLongReadPiece*iterationLength; sIndex < (curLongReadPiece*iterationLength) + numberOfKmersForEachReadPiece; sIndex++){
                         
-                        string longReadKMer = longreads[curKey->first].substr(sIndex, kmerlength);
+                        string longReadKMer = longReads[curKey->first].substr(sIndex, kmerlength);
                         uint32_t longReadMurmurOut;
                         MurmurHash3_x86_32( longReadKMer.c_str(), longReadKMer.size(), 0, &longReadMurmurOut);
                         
@@ -303,28 +282,22 @@ void secondFilterElimination( vector< map<int, vector<int> > > &pairsPassedFirst
 
 int main(int argc, const char * argv[]) {
 	CommandLineOptions options;
-	seqan::ArgumentParser::ParseResult res = parseCommandLine(options, argc, argv);
+	seqan::ArgumentParser::ParseResult parseRes = parseCommandLine(options, argc, argv);
 	
-	if (res != seqan::ArgumentParser::PARSE_OK)
-		return res == seqan::ArgumentParser::PARSE_ERROR;
+	if (parseRes != seqan::ArgumentParser::PARSE_OK)
+		return parseRes == seqan::ArgumentParser::PARSE_ERROR;
 	
-	loadReads (options.shortInputFile, shortReadIds, shortReadSeqs, shortreads);
-	loadReads (options.longInputFile, longReadIds, longReadSeqs, longreads); 
-
-	clock_t start = clock();
-	cout << "[INFO] Creating kmers..." << endl;
-	createKMers (shortreads, shortkmers, options.filter1KmerSize);
-	createKMers (longreads, longkmers, options.filter1KmerSize);
-	printf("[INFO] Time taken for creating kmers: %.2fs\n", (double)(clock() - start)/CLOCKS_PER_SEC);
+	loadReads (options.shortInputFile, shortReadIds, shortReadSeqs, shortReads);
+	loadReads (options.longInputFile, longReadIds, longReadSeqs, longReads); 
 
 	clock_t hashShortStart = clock();
-	cout << "[INFO] Creating fingerprints..." << endl;
-	createHMurmurHashFingerPrints(shortkmers, shortMurmurhashFingerprints, options.hashCount, options.numberOfThreads);
-	printf("[INFO] Time taken for creating fingerprints (short reads): %.2fs\n", (double)(clock() - hashShortStart)/CLOCKS_PER_SEC);
+	cout << "Creating fingerprints..." << endl;
+	createHMurmurHashFingerPrints(shortReads, shortMurmurhashFingerprints, options.filter1KmerSize, options.hashCount, options.numberOfThreads);
+	printf("Time taken for creating fingerprints (short reads): %.2fs\n", (double)(clock() - hashShortStart)/CLOCKS_PER_SEC);
 	clock_t hashLongStart = clock();
-	createHMurmurHashFingerPrints(longkmers, longMurmurhashFingerprints, options.hashCount, options.numberOfThreads);
-	printf("[INFO] Time taken for creating fingerprints (long reads): %.2fs\n", (double)(clock() - hashLongStart)/CLOCKS_PER_SEC);
-	printf("[INFO] Time taken for creating fingerprints (short + long reads): %.2fs\n", (double)(clock() - hashShortStart)/CLOCKS_PER_SEC);
+	createHMurmurHashFingerPrints(longReads, longMurmurhashFingerprints, options.filter1KmerSize, options.hashCount, options.numberOfThreads);
+	printf("Time taken for creating fingerprints (long reads): %.2fs\n", (double)(clock() - hashLongStart)/CLOCKS_PER_SEC);
+	printf("Time taken for creating fingerprints (short + long reads): %.2fs\n", (double)(clock() - hashShortStart)/CLOCKS_PER_SEC);
 
 	cout << "[INFO] Creating minmers..." << endl;
 	clock_t minmerStart = clock();
@@ -338,24 +311,23 @@ int main(int argc, const char * argv[]) {
 
 	cout << "[INFO] Applying first filter..." << endl;
 	clock_t fStart = clock();
-	firstFilterElimination (shortMinmers, longMinmers, filteredPairsF1, shortreads.size(), longreads.size(), options.hashCount, options.filter1JaccardThreshold);
+	firstFilterElimination (shortMinmers, longMinmers, filteredPairsF1, shortReads.size(), longReads.size(), options.hashCount, options.filter1JaccardThreshold);
 	printf("[INFO] Time taken for first filter: %.2fs\n", (double)(clock() - fStart)/CLOCKS_PER_SEC);
 	//TODO: true mappings tend to pass from first filter as 2 or 3 consecutive pieces
 
 	long long counter = 0;
-        for (int i = 0; i < shortreads.size(); ++i) {
+        for (int i = 0; i < shortReads.size(); ++i) {
                 counter += filteredPairsF1[i].size();
         }
         cout << "[INFO] after f1: " << counter << endl;
 
 	cout << "[INFO] Applying second filter..." << endl;
 	clock_t f2Start = clock();
-	secondFilterElimination(filteredPairsF1, shortreads, longreads, filteredPairsF2, 
+	secondFilterElimination(filteredPairsF1, shortReads, longReads, filteredPairsF2, 
 				options.pieceLength, options.iterationLength, options.filter2KmerSize, options.filter2JaccardThreshold);
 	printf("[INFO] Time taken for second filter: %.2fs\n", (double)(clock() - f2Start)/CLOCKS_PER_SEC);
-	printf("[INFO] Time taken for all processes: %.2fs\n", (double)(clock() - start)/CLOCKS_PER_SEC);
 	counter  = 0;
-	for (int i = 0; i < shortreads.size(); ++i)
+	for (int i = 0; i < shortReads.size(); ++i)
 		counter += filteredPairsF2[i].size();
 	cout << "[INFO] after f2: " << counter << endl;
 

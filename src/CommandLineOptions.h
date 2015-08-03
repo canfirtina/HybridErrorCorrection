@@ -27,10 +27,13 @@ seqan::ArgumentParser::ParseResult
 parseCommandLine(CommandLineOptions & options, int argc, char const ** argv)
 {
 	using namespace std;
-	seqan::ArgumentParser parser("error_correction_filters");
+	seqan::ArgumentParser parser("hybrid_error_correction");
 
-	addOption(parser, seqan::ArgParseOption("LI", "longInputFile", "fast{a,q} file which contains long reads.", seqan::ArgParseArgument::INPUT_FILE, "FILE"));
-	addOption(parser, seqan::ArgParseOption("SI", "shortInputFile", "fast{a,q} file which contains short reads.", seqan::ArgParseArgument::INPUT_FILE, "FILE"));
+	addOption(parser, seqan::ArgParseOption("li", "longInputFile", "fast{a,q} file which contains long reads.", seqan::ArgParseArgument::INPUT_FILE, "FILE"));
+	setRequired(parser, "li");
+
+	addOption(parser, seqan::ArgParseOption("si", "shortInputFile", "fast{a,q} file which contains short reads.", seqan::ArgParseArgument::INPUT_FILE, "FILE"));
+	setRequired(parser, "si");
 	
 	addOption(parser, seqan::ArgParseOption("k1", "filter1KmerSize", "k-mer size for 1st filter.", seqan::ArgParseArgument::INTEGER, "INT"));
 	addOption(parser, seqan::ArgParseOption("k2", "filter2KmerSize", "k-mer size for 2nd filter.", seqan::ArgParseArgument::INTEGER, "INT"));
