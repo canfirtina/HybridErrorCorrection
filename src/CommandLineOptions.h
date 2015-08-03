@@ -1,5 +1,5 @@
-#ifndef PARSE_COMMAND_LINE_OPTIONS_H_
-#define PARSE_COMMAND_LINE_OPTIONS_H_
+#ifndef COMMAND_LINE_OPTIONS_H_
+#define COMMAND_LINE_OPTIONS_H_
 
 #include <iostream>
 #include <seqan/arg_parse.h>

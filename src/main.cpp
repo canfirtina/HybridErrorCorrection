@@ -20,7 +20,7 @@
 #include <seqan/seq_io.h>
 
 #include "MurmurHash3.h"
-#include "parse_args.h"
+#include "CommandLineOptions.h"
 
 using namespace std;
 using namespace seqan;
