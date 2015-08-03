@@ -59,18 +59,6 @@ parseCommandLine(CommandLineOptions & options, int argc, char const ** argv)
 	getOptionValue(options.iterationLength, parser, "iterationLength");
 	getOptionValue(options.numberOfThreads, parser, "numberOfThreads");
 	
-	/*
-	cout << options.longInputFile << endl;
-	cout << options.shortInputFile << endl;
-	cout << options.filter1KmerSize << endl;
-	cout << options.filter2KmerSize << endl;
-	cout << options.hashCount << endl;
-	cout << options.filter1JaccardThreshold << endl;
-	cout << options.filter2JaccardThreshold << endl;
-	cout << options.pieceLength << endl;
-	cout << options.iterationLength << endl;
-	cout << options.numberOfThreads << endl;
-	*/
 	return seqan::ArgumentParser::PARSE_OK;
 }
 
